@@ -152,9 +152,24 @@ v1 <- left_join(v0,vge)
 table(v1$especie)
 table(v1$prueba_solicitada)
 
-# Criando os casos
+# Filtrando porcinos
 v2 <- v1 %>%
   filter(especie == "PORCINOS") 
+
+v2 <- v2 %>%
+  # filter(detalle_diagnóstico == "Peste porcina clásica")%>%
+  # filter(detalle_diagnóstico == "PESTE PORCINA CLÁSICA")%>%
+  group_by(orden, provincia, canton, parroquia, cedula, propietario, semana, zona, 
+           coord_x, coord_y, predio,t_explotación, notificador, 
+           f_1er_enfermo, f_notificación, f_1era_visita, síndrome_presuntivo,
+           patología, especie, edad, f_elaboración, f_ingreso, f_cierre_orden,
+           responsable, vacuno, focal, dosis_focal, perifocal, dosis_perifocal, 
+           especie_f, colecta)%>%
+  summarise(existente=sum(existentes, muertos, sacrificad), enfermo=sum(enfermos), mortos=sum(muertos), 
+            sacrifi=sum(sacrificad), afetados=sum(muertos,sacrificad), 
+            pos=sum(positivos), total_muestras=sum(cant_muestras), 
+            indeterm=sum(indeterminados), reactivo=sum(reactivos))
+
 
 #agregando ano
 v2$ano <- year(dmy(v2$f_1er_enfermo))
@@ -174,9 +189,73 @@ length(unique(v2$orden))
 
 # -- Vigilancia geral suinos ----
 # numero de notificaciones
+
+# Asignando columna de fechas para graficos
+v2$f_1er_enfermo <- dmy(v2$f_1er_enfermo)
+# Changing to floor date week
+v2$week <- floor_date(v2$f_1er_enfermo, "week")
+# Best visualizations by month
+v2$Month <- floor_date(v2$f_1er_enfermo, "month")
+
+
 v2 %>%
   group_by(ano)%>%
   summarise(notifi=length(unique(orden)))
+
+
+# Número de notificaciones generales de porcinos
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral), fill="#377EB8")+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general porcinos",
+       x="Meses")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# Número de notificaciones por sindrome presuntivo
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month,síndrome_presuntivo)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral,fill=síndrome_presuntivo))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general porcinos",
+       x="Meses")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+# Número de notificaciones por sindrome presuntivo
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month,notificador)%>%
+  filter(ano >2020)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral,fill=notificador))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general porcinos",
+       x="Meses")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+
+
+
 
 
 #7 -- Vigilancia especifica PPC----
@@ -273,7 +352,7 @@ v2 %>%
   ggplot()+
   geom_col(aes(Month,notifi_geral), fill="#377EB8")+
   scale_y_continuous(breaks= pretty_breaks())+
-  labs(y="Notificaciones vigilancia general",
+  labs(y="Notificaciones vigilancia especifica PPC",
        x="Meses")+
   theme_minimal() +
   theme(text = element_text(size = 14))
@@ -289,7 +368,7 @@ v2 %>%
   ggplot()+
   geom_col(aes(week,notifi_geral), fill="#377EB8")+
   scale_y_continuous(breaks= pretty_breaks())+
-  labs(y="Notificaciones por semana ",
+  labs(y="Notificaciones PPC por semana ",
        x="Meses")+
   theme_minimal() +
   theme(text = element_text(size = 14))
