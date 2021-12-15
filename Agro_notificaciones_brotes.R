@@ -1,13 +1,13 @@
-# Codigo juntar archivos sizse Vigilancia
-# Estimacion de la sensibilidad del sistema de vigilancia epidemiologica para PPC
-#Alfredo Acosta
+# Codigo Notificaciones y brotes Vigilancia SIZSE
+# V 0.01 
+# Projecto Estimacion de la sensibilidad del sistema de vigilancia epidemiologica para PPC
+# Autor Alfredo Acosta
 # alfredojavier55@gmail.com
 # Phd Candidate University of Sao Paulo
 # Preventive veterinary medicine department
-#https://github.com/alfredojavier55/Preparing_agro_data
+# https://github.com/alfredojavier55/Preparing_agro_data
 
 # Juntar archivos vigilancia (join-vig) ----
-# 9.11.21
 
 setwd("~/Dropbox/0.USP/1 Projeto/Conferir-dados/2021")
 library(dplyr);library(lubridate)
@@ -46,8 +46,7 @@ colnames(vge)
 vge <- vge[,c(1,5:7,9,10,4,8,8,8,11:18,
               20:24,3,3,27)]
 
-#por algo agregaron las columnas y las deberian usar
-# Completar... cristian
+# por algo agregaron las columnas y las deberian usar
 # vge <- vge[,c(1,5:7,9,10,4,8,8,8,11:18,
 #               20:24,3,3,27,  2,19,25,26)]
 # 
@@ -145,13 +144,208 @@ vc$sacrificad <- as.numeric(vc$sacrificad)
 vc$canton <- vc$cantón
 vc$cantón <- NULL
 
-# -- Vigilancia general porcinos ----
+# -- Vigilancia general ----
 v0 <- left_join(vc, vr)
 v1 <- left_join(v0,vge)
 
 table(v1$especie)
 table(v1$prueba_solicitada)
 
+# Todas las especies
+
+v2 <- v1 %>%
+  # filter(detalle_diagnóstico == "Peste porcina clásica")%>%
+  # filter(detalle_diagnóstico == "PESTE PORCINA CLÁSICA")%>%
+  group_by(orden, provincia, canton, parroquia, cedula, propietario, semana, zona, 
+           coord_x, coord_y, predio,t_explotación, notificador, 
+           f_1er_enfermo, f_notificación, f_1era_visita, síndrome_presuntivo,
+           patología, especie, edad, f_elaboración, f_ingreso, f_cierre_orden,
+           detalle_diagnóstico,
+           responsable, vacuno, focal, dosis_focal, perifocal, dosis_perifocal, 
+           especie_f, colecta)%>%
+  summarise(existente=sum(existentes, muertos, sacrificad), enfermo=sum(enfermos), mortos=sum(muertos), 
+            sacrifi=sum(sacrificad), afetados=sum(muertos,sacrificad), 
+            pos=sum(positivos), total_muestras=sum(cant_muestras), 
+            indeterm=sum(indeterminados), reactivo=sum(reactivos))
+
+# Agregando ano
+v2$ano <- year(dmy(v2$f_1er_enfermo))
+v2$month <- month(dmy(v2$f_1er_enfermo))
+
+# Numero total de eventos
+length(unique(v2$orden))
+
+v2$f_1er_enfermo <- dmy(v2$f_1er_enfermo)
+# Changing to floor date week
+v2$week <- floor_date(v2$f_1er_enfermo, "week")
+# Best visualizations by month
+v2$Month <- floor_date(v2$f_1er_enfermo, "month")
+
+# Numero de ordenes
+v2 %>%
+  group_by(ano)%>%
+  # filter(ano >2020)%>%
+  summarise(notifi=length(unique(orden)))
+
+
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral), fill="#377EB8")+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general porcinos",
+       x="Meses")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+# Numero de notificaciones
+# Número de notificaciones por especie
+v2 %>%
+  # group_by(month)%>%
+  group_by(especie_f)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2014)%>%
+  summarise(notifi_geral=length(unique(orden)))%>%
+  arrange(desc(notifi_geral))
+
+
+# Número de notificaciones por especie alta notificacion
+v2 %>%
+  # group_by(month)%>%
+  group_by(ano, especie_f)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2013)%>%
+  filter(especie_f=="BOVINOS" | especie_f == "PORCINOS"
+         | especie_f == "OVINOS" | especie_f == "EQUINOS" | especie_f == "ABEJAS")%>%
+  summarise(notifi_geral=length(unique(orden)))%>%
+  arrange(desc(notifi_geral))%>%
+  ggplot()+
+  geom_col(aes(ano,notifi_geral))+
+  geom_text(aes(ano, notifi_geral, label=(notifi_geral)), nudge_y = 200)+
+  facet_grid(rows = vars(especie_f))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general",
+       x="Año")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# Número de notificaciones por especie notificacion intermedia
+
+v2 %>%
+  # group_by(month)%>%
+  group_by(ano, especie_f)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2013)%>%
+  filter(especie_f =="CAPRINOS" | especie_f == "OVINOS"
+         | especie_f == "CUYES" | especie_f == "AVES"
+         | especie_f == "PERROS" | especie_f == "CAMELIDOS" | especie_f == "GATOS")%>%
+  summarise(notifi_geral=length(unique(orden)))%>%
+  arrange(desc(notifi_geral))%>%
+  ggplot()+
+  geom_col(aes(ano,notifi_geral))+
+  geom_text(aes(ano, notifi_geral, label=(notifi_geral)), nudge_y = 10)+
+  facet_grid(rows = vars(especie_f))+
+  # scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general",
+       x="Año")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# Número de notificaciones por especie baja notificacion
+
+v2 %>%
+  # group_by(month)%>%
+  group_by(ano, especie_f)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2013)%>%
+  filter(especie_f =="CERVIDOS" | especie_f == "CONEJOS"
+         | especie_f == "MURCIELAGOS" | especie_f == "NO APLICA" | especie_f == "BUBALINOS")%>%
+  summarise(notifi_geral=length(unique(orden)))%>%
+  arrange(desc(notifi_geral))%>%
+  ggplot()+
+  geom_col(aes(ano,notifi_geral))+
+  geom_text(aes(ano, notifi_geral, label=(notifi_geral)), nudge_y = 10)+
+  facet_grid(rows = vars(especie_f))+
+  # scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general",
+       x="Año")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+
+
+# numero de notificaciones por sindrome presuntivo
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month,síndrome_presuntivo, especie_f)%>%
+  # filter(ano <2020)%>%
+  filter(ano >2013)%>%
+  filter(especie_f=="BOVINOS" | especie_f == "PORCINOS"
+         | especie_f == "OVINOS" | especie_f == "EQUINOS" | especie_f == "ABEJAS")%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral,fill=síndrome_presuntivo))+
+  facet_grid(rows = vars(especie_f))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y=NULL,
+       title="Notificaciones por sindrome presuntivo",
+       x=NULL)+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# ejemplo bovinos
+# numero de notificaciones por sindrome presuntivo
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month,síndrome_presuntivo, especie_f)%>%
+  # filter(ano <2020)%>%
+  filter(ano >2013)%>%
+  filter(especie_f=="BOVINOS")%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral,fill=síndrome_presuntivo))+
+  facet_grid(rows = vars(especie_f))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y=NULL,
+       title="Notificaciones por sindrome presuntivo",
+       x=NULL)+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# ejemplo bovinos
+# numero de notificaciones por sindrome presuntivo, 2021
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month, ano,patología, especie_f)%>%
+  filter(ano >2020)%>%
+  # filter(ano >2013)%>%
+  filter(especie_f=="BOVINOS")%>%
+  summarise(notifi_geral=length(unique(orden)))%>%
+  arrange(desc(notifi_geral))%>%
+  # head(.,50)%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral, fill=patología))+
+  facet_grid(rows = vars(ano))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y=NULL,
+       title="Notificaciones por sindrome presuntivo",
+       x=NULL)+
+  theme_minimal() +
+  theme(text = element_text(size = 8))
+
+
+
+# Vigilancia por especie ----
+# Ejemplo PORCINOS PPC
 # Filtrando porcinos
 v2 <- v1 %>%
   filter(especie == "PORCINOS") 
@@ -170,8 +364,7 @@ v2 <- v2 %>%
             pos=sum(positivos), total_muestras=sum(cant_muestras), 
             indeterm=sum(indeterminados), reactivo=sum(reactivos))
 
-
-#agregando ano
+# Agregando ano
 v2$ano <- year(dmy(v2$f_1er_enfermo))
 v2$month <- month(dmy(v2$f_1er_enfermo))
 
@@ -187,8 +380,7 @@ length(unique(v2$orden))
 #1758 com atualizacao 10/10/2021 todas as patologias
 #1863 com atualizacao 10/12/2021 todas as patologias
 
-# -- Vigilancia geral suinos ----
-# numero de notificaciones
+# Nmero de notificaciones generales por especie
 
 # Asignando columna de fechas para graficos
 v2$f_1er_enfermo <- dmy(v2$f_1er_enfermo)
@@ -197,14 +389,12 @@ v2$week <- floor_date(v2$f_1er_enfermo, "week")
 # Best visualizations by month
 v2$Month <- floor_date(v2$f_1er_enfermo, "month")
 
-
 v2 %>%
-  group_by(ano, orden)%>%
-  filter(ano >2020)%>%
+  group_by(ano)%>%
+  # filter(ano >2020)%>%
   summarise(notifi=length(unique(orden)))
 
-
-# Número de notificaciones generales de porcinos
+# Grafico número de notificaciones generales de porcinos
 v2 %>%
   # group_by(month)%>%
   group_by(Month)%>%
@@ -219,6 +409,23 @@ v2 %>%
        x="Meses")+
   theme_minimal() +
   theme(text = element_text(size = 14))
+
+# Grafico número de notificaciones generales por patologia
+v2 %>%
+  # group_by(month)%>%
+  group_by(Month, patología)%>%
+  # filter(ano <2020)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(pos >= 1, na.rm = TRUE))%>%
+  ggplot()+
+  geom_col(aes(Month,notifi_geral, fill=patología))+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia general porcinos",
+       x="Meses")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
 
 # Número de notificaciones por sindrome presuntivo
 v2 %>%
@@ -255,11 +462,7 @@ v2 %>%
 
 
 
-
-
-
-
-#7 -- Vigilancia especifica PPC----
+# -- Vigilancia dirigida ----
 #criando o v2 novo com as notificações extra
 # Linkage dos reportes
 library(stringr)
@@ -274,7 +477,8 @@ table(v1$prueba_solicitada)
 v2 <- v1 %>%
   filter(especie == "PORCINOS") 
 
-#Filtro vigilancia especifica ppc. Todas aquellas notificaciones en las cuales
+#Filtro vigilancia especifica ppc. 
+# Todas aquellas notificaciones en las cuales
 # se requirio prueba para PPC
 v2 <- v2 %>%
   filter(prueba_solicitada != "PESTE PORCINA CLÁSICA (AC.)")
@@ -301,15 +505,10 @@ v2 <- v2 %>%
             pos=sum(positivos), total_muestras=sum(cant_muestras), 
             indeterm=sum(indeterminados), reactivo=sum(reactivos))%>%
   mutate(definitivo=ifelse(pos>=1,"caso", "notifi"))
-  
+
 
 length(unique(v2$orden))
 table(v2$definitivo)
-
-#Quando faço este mesto filtro ao tirar o detalhe diagnostico de PPC
-#qualquer outra fica como que se fosse ppc e isso nao e certo.
-# inclui prueba solicitada, os casos são submetidos a varias provas, estou registrando
-# o primeiro que sai desde o joint com os resultados
 
 plot(v2$existente)
 hist(log(v2$existente))
@@ -331,7 +530,7 @@ v2 <- v2[v2$orden != "6270",]
 length(unique(v2$orden))
 #1089 com atualizacao 10/12/2021 todas as patologias
 
-# numero de notificaciones
+# numero de notificaciones y casos confirmados
 v2 %>%
   group_by(ano)%>%
   summarise(notifi=length(unique(orden)))
@@ -350,12 +549,10 @@ v2 %>%
   summarise(numero=n())%>%
   spread(value="numero", key="definitivo")
 
-
-
 # Cargando librerias de color
 library(RColorBrewer)
-display.brewer.pal(n=8,name="Set1")
-brewer.pal(n=8,name="Set1")
+display.brewer.pal(n=4,name="Set1")
+brewer.pal(n=4,name="Set1")
 show_col(viridis_pal()(4))
 
 
