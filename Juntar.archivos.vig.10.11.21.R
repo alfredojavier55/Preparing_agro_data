@@ -199,7 +199,8 @@ v2$Month <- floor_date(v2$f_1er_enfermo, "month")
 
 
 v2 %>%
-  group_by(ano)%>%
+  group_by(ano, orden)%>%
+  filter(ano >2020)%>%
   summarise(notifi=length(unique(orden)))
 
 
@@ -261,22 +262,34 @@ v2 %>%
 #7 -- Vigilancia especifica PPC----
 #criando o v2 novo com as notificações extra
 # Linkage dos reportes
+library(stringr)
+
 v0 <- left_join(vc, vr)
 v1 <- left_join(v0,vge)
 
 table(v1$especie)
 table(v1$prueba_solicitada)
 
-# Criando os casos
+# Filtro porcinos
 v2 <- v1 %>%
   filter(especie == "PORCINOS") 
 
+#Filtro vigilancia especifica ppc. Todas aquellas notificaciones en las cuales
+# se requirio prueba para PPC
 v2 <- v2 %>%
   filter(prueba_solicitada != "PESTE PORCINA CLÁSICA (AC.)")
+
 ###
 v2 <- v2 %>%
   # filter(detalle_diagnóstico == "Peste porcina clásica")%>%
   filter(detalle_diagnóstico == "PESTE PORCINA CLÁSICA")%>%
+  group_by(orden, provincia, canton, parroquia, cedula, propietario, semana, zona, 
+           coord_x, coord_y, predio,t_explotación, notificador, 
+           f_1er_enfermo, f_notificación, f_1era_visita, síndrome_presuntivo,
+           patología, especie, edad, f_elaboración, f_ingreso, f_cierre_orden, prueba_solicitada,
+           responsable, vacuno, focal, dosis_focal, perifocal, dosis_perifocal, 
+           especie_f, colecta)%>%
+  filter(str_detect(prueba_solicitada, "PESTE PORCINA"))%>%
   group_by(orden, provincia, canton, parroquia, cedula, propietario, semana, zona, 
            coord_x, coord_y, predio,t_explotación, notificador, 
            f_1er_enfermo, f_notificación, f_1era_visita, síndrome_presuntivo,
@@ -286,7 +299,12 @@ v2 <- v2 %>%
   summarise(existente=sum(existentes, muertos, sacrificad), enfermo=sum(enfermos), mortos=sum(muertos), 
             sacrifi=sum(sacrificad), afetados=sum(muertos,sacrificad), 
             pos=sum(positivos), total_muestras=sum(cant_muestras), 
-            indeterm=sum(indeterminados), reactivo=sum(reactivos))
+            indeterm=sum(indeterminados), reactivo=sum(reactivos))%>%
+  mutate(definitivo=ifelse(pos>=1,"caso", "notifi"))
+  
+
+length(unique(v2$orden))
+table(v2$definitivo)
 
 #Quando faço este mesto filtro ao tirar o detalhe diagnostico de PPC
 #qualquer outra fica como que se fosse ppc e isso nao e certo.
@@ -313,7 +331,6 @@ v2 <- v2[v2$orden != "6270",]
 length(unique(v2$orden))
 #1089 com atualizacao 10/12/2021 todas as patologias
 
-# 5 -- Vigilancia geral suinos ----
 # numero de notificaciones
 v2 %>%
   group_by(ano)%>%
@@ -321,11 +338,19 @@ v2 %>%
 
 # Numero de casos e notificacoes ----
 v2 %>%
-  group_by(ano)%>%
+  group_by(ano, patología)%>%
   # mutate(caso=ifelse(pos>=1,"caso", "control"))%>%
   # filter(ano == "2021")%>%
-  summarise(notifi_PPC=length(unique(orden)),
-            surtos_PPC=sum(pos >= 1, na.rm = TRUE))
+  summarise(detalle=n())
+
+# Numero de notificaciones y casos confirmados
+library(tidyr)
+v2 %>%
+  group_by(ano, definitivo)%>%
+  summarise(numero=n())%>%
+  spread(value="numero", key="definitivo")
+
+
 
 # Cargando librerias de color
 library(RColorBrewer)
@@ -341,14 +366,14 @@ v2$week <- floor_date(v2$f_1er_enfermo, "week")
 # Best visualizations by month
 v2$Month <- floor_date(v2$f_1er_enfermo, "month")
 
-# Graficos
+# Graficos notificaciones
 v2 %>%
   # group_by(month)%>%
   group_by(Month)%>%
   # filter(ano <2020)%>%
   # filter(ano >2016)%>%
   summarise(notifi_geral=length(unique(orden)),
-            casos=sum(pos >= 1, na.rm = TRUE))%>%
+            casos=sum(definitivo == 'caso'))%>%
   ggplot()+
   geom_col(aes(Month,notifi_geral), fill="#377EB8")+
   scale_y_continuous(breaks= pretty_breaks())+
@@ -364,7 +389,7 @@ v2 %>%
   # filter(ano <2020)%>%
   # filter(ano >2016)%>%
   summarise(notifi_geral=length(unique(orden)),
-            diagnosticados=sum(pos >= 1, na.rm = TRUE))%>%
+            casos=sum(definitivo == 'caso'))%>%
   ggplot()+
   geom_col(aes(week,notifi_geral), fill="#377EB8")+
   scale_y_continuous(breaks= pretty_breaks())+
@@ -374,16 +399,57 @@ v2 %>%
   theme(text = element_text(size = 14))
 
 
-# Casos por meses
+# notificaciones por ano
 v2 %>%
-  group_by(Month)%>%
+  # group_by(Month)%>%
+  group_by(ano)%>%
   # group_by(week)%>%
-  # filter(ano <2020)%>%
+  filter(ano > 2014)%>%
   # filter(ano >2016)%>%
   summarise(notifi_geral=length(unique(orden)),
-            casos=sum(pos >= 1, na.rm = TRUE))%>%
+            casos=sum(definitivo == 'caso'))%>%
   ggplot()+
-  geom_col(aes(Month,casos), fill="#377EB8")+
+  geom_col(aes(ano,notifi_geral), fill="#377EB8")+
+  geom_text(aes(ano, notifi_geral, label=(notifi_geral)), nudge_y = 7)+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones vigilancia dirigida PPC",
+       x="Anos")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+v2 %>%
+  # group_by(Month)%>%
+  group_by(ano)%>%
+  # group_by(week)%>%
+  filter(ano > 2014)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(definitivo == 'caso'))%>%
+  ggplot()+
+  geom_col(aes(ano,notifi_geral), fill="#377EB8")+
+  geom_col(aes(ano,casos), fill="red")+
+  geom_text(aes(ano, notifi_geral, label=(notifi_geral)), nudge_y = 7)+
+  geom_text(aes(ano, casos, label=(casos)), nudge_y = 6)+
+  scale_y_continuous(breaks= pretty_breaks())+
+  labs(y="Notificaciones y casos vigilancia PPC",
+       x="Anos")+
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+
+# Casos por meses
+v2 %>%
+  # group_by(Month)%>%
+  group_by(ano)%>%
+  # group_by(week)%>%
+  filter(ano > 2014)%>%
+  # filter(ano >2016)%>%
+  summarise(notifi_geral=length(unique(orden)),
+            casos=sum(definitivo == 'caso'))%>%
+  ggplot()+
+  geom_col(aes(ano,casos), fill="#377EB8")+
+  geom_text(aes(ano, casos, label=(casos)), nudge_y = 3)+
   scale_y_continuous(breaks= pretty_breaks())+
   labs(y="Casos PPC",
        x="Meses")+
@@ -406,7 +472,3 @@ v2 %>%
        x="Meses")+
   theme_minimal() +
   theme(text = element_text(size = 14))
-
-
-
-
